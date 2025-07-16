@@ -1,0 +1,53 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "myacr1234.azurecr.io/my-dotnet-app"
+        ACR_LOGIN_SERVER = "myacr1234.azurecr.io"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/your-username/MyDotNetApp.git'
+            }
+        }
+        stage('Restore & Build') {
+            steps {
+                sh 'dotnet restore'
+                sh 'dotnet build --configuration Release'
+            }
+        }
+        stage('Test') {
+            steps {
+                sh 'dotnet test Tests/MyDotNetApp.Tests.csproj'
+            }
+        }
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t $IMAGE_NAME:$BUILD_NUMBER .'
+            }
+        }
+        stage('Docker Login to ACR') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'acr-creds', usernameVariable: 'ACR_USER', passwordVariable: 'ACR_PASS')]) {
+                    sh 'echo $ACR_PASS | docker login $ACR_LOGIN_SERVER -u $ACR_USER --password-stdin'
+                }
+            }
+        }
+        stage('Docker Push') {
+            steps {
+                sh 'docker push $IMAGE_NAME:$BUILD_NUMBER'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Build and push succeeded!"
+        }
+        failure {
+            echo "Build failed!"
+        }
+    }
+}
